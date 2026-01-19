@@ -61,3 +61,43 @@ Reconstruct a touched surface using the calibration model. Calibration steps are
 python examples/reconstruct.py
 ```
 The reconstructed surface will be displayed and saved in `examples/data`.
+
+## Extensions in This Fork: Multi-GelSight Support
+
+This fork extends the original **gs_sdk** with **robust support for multiple GelSight sensors on a single machine** (e.g., left/right fingers).
+
+The main challenge is that a single GelSight device exposes **multiple `/dev/video*` nodes**, and multiple sensors of the same model cannot be reliably distinguished by index alone.  
+This fork introduces **deterministic device resolution** based on **hardware-bound device names and stream capability detection**.
+
+---
+
+### What’s New
+
+- **Deterministic device selection**  
+  Each physical GelSight sensor is identified by its V4L2 device name (e.g. `GelSight Mini R0B 2DE9-0HLG: Ge`).
+
+- **Automatic stream resolution**  
+  Among multiple `/dev/video*` nodes, the SDK automatically selects the true image stream based on supported resolution (e.g. `3280×2464`).
+
+- **YAML-based per-device configuration**  
+  Each physical sensor is configured via its own YAML file, making multi-sensor setups clean and scalable.
+
+---
+
+### YAML Configuration (Recommended)
+
+Each physical GelSight sensor should have **one YAML file**.
+
+#### Example: `gsmini_left.yaml`
+
+```yaml
+device_name: "GelSight Mini R0B 2DDZ-43PB: Ge"
+
+ppmm: 0.0634
+
+imgh: 240
+imgw: 320
+
+raw_imgh: 2464
+raw_imgw: 3280
+framerate: 25
