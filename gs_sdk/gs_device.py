@@ -6,6 +6,57 @@ import cv2
 import ffmpeg
 import numpy as np
 
+def video_has_valid_stream(video_dev: str,
+                           min_width=3000,
+                           min_height=2000) -> bool:
+    try:
+        out = subprocess.check_output(
+            ["v4l2-ctl", "--device", video_dev, "--list-formats-ext"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return False
+
+    matches = re.findall(r"Size:\s+Discrete\s+(\d+)x(\d+)", out)
+    for w, h in matches:
+        if int(w) >= min_width and int(h) >= min_height:
+            return True
+    return False
+
+
+def resolve_gelsight_device(target_name: str) -> str:
+    video_root = "/sys/class/video4linux"
+    candidates = []
+
+    for entry in os.listdir(video_root):
+        if not entry.startswith("video"):
+            continue
+
+        name_path = os.path.join(video_root, entry, "name")
+        try:
+            with open(name_path, "r") as f:
+                name = f.read().strip()
+        except OSError:
+            continue
+
+        
+        if name == target_name:
+            candidates.append(f"/dev/{entry}")
+
+    if not candidates:
+        raise RuntimeError(
+            f"No video devices found with name '{target_name}'."
+        )
+
+    for video_dev in candidates:
+        if video_has_valid_stream(video_dev):
+            return video_dev
+
+    raise RuntimeError(
+        f"Found devices {candidates} for '{target_name}', "
+        f"but none expose a valid video stream."
+    )
 
 class Camera:
     """
@@ -24,7 +75,8 @@ class Camera:
         :param imgw: int; The width of the image.
         """
         self.dev_type = dev_type
-        self.dev_id = get_camera_id(self.dev_type)
+        # self.dev_id = get_camera_id(self.dev_type)
+        self.device = resolve_gelsight_device(self.dev_type)
         self.imgh = imgh
         self.imgw = imgw
         self.cam = None
@@ -34,7 +86,8 @@ class Camera:
         """
         Connect to the camera using cv2 streamer.
         """
-        self.cam = cv2.VideoCapture(self.dev_id)
+        # self.cam = cv2.VideoCapture(self.dev_id)
+        self.cam = cv2.VideoCapture(self.device)
         self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if self.cam is None or not self.cam.isOpened():
             print("Warning: unable to open video source %d" % (self.dev_id))
@@ -100,8 +153,10 @@ class FastCamera:
         self.imgw = imgw
         # Get camera ID
         self.dev_type = dev_type
-        self.dev_id = get_camera_id(self.dev_type, verbose)
-        self.device = "/dev/video" + str(self.dev_id)
+        # self.dev_id = get_camera_id(self.dev_type, verbose)
+        # self.device = "/dev/video" + str(self.dev_id)
+        self.device = resolve_gelsight_device(self.dev_type)
+
 
     def connect(self, verbose=True):
         """
@@ -155,30 +210,30 @@ class FastCamera:
         self.process.wait()
 
 
-def get_camera_id(camera_name, verbose=True):
-    """
-    Find the camera ID that has the corresponding camera name.
+# def get_camera_id(camera_name, verbose=True):
+#     """
+#     Find the camera ID that has the corresponding camera name.
 
-    :param camera_name: str; The name of the camera.
-    :param verbose: bool; Whether to print the camera information.
-    :return: int; The camera ID.
-    """
-    cam_num = None
-    for file in os.listdir("/sys/class/video4linux"):
-        real_file = os.path.realpath("/sys/class/video4linux/" + file + "/name")
-        with open(real_file, "rt") as name_file:
-            name = name_file.read().rstrip()
-        if camera_name in name:
-            cam_num = int(re.search("\d+$", file).group(0))
-            if verbose:
-                found = "FOUND!"
-        else:
-            if verbose:
-                found = "      "
-        if verbose:
-            print("{} {} -> {}".format(found, file, name))
+#     :param camera_name: str; The name of the camera.
+#     :param verbose: bool; Whether to print the camera information.
+#     :return: int; The camera ID.
+#     """
+#     cam_num = None
+#     for file in os.listdir("/sys/class/video4linux"):
+#         real_file = os.path.realpath("/sys/class/video4linux/" + file + "/name")
+#         with open(real_file, "rt") as name_file:
+#             name = name_file.read().rstrip()
+#         if camera_name in name:
+#             cam_num = int(re.search("\d+$", file).group(0))
+#             if verbose:
+#                 found = "FOUND!"
+#         else:
+#             if verbose:
+#                 found = "      "
+#         if verbose:
+#             print("{} {} -> {}".format(found, file, name))
 
-    return cam_num
+#     return cam_num
 
 
 def resize_crop(img, imgw, imgh):

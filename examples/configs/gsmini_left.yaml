@@ -1,0 +1,12 @@
+device_name: "GelSight Mini R0B 2DE9-0HLG: Ge"
+
+ppmm: 0.0634
+
+# Output image size (after crop)
+imgh: 240
+imgw: 320
+
+# Raw stream parameters
+raw_imgh: 2464
+raw_imgw: 3280
+framerate: 25
